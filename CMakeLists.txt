@@ -109,6 +109,16 @@ add_llvm_library(ZeroAnalysis MODULE PARTIAL_SOURCES_INTENDED
 set_target_properties(ZeroAnalysis PROPERTIES
   LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
 
+add_llvm_library(ExtendedSignAnalysis MODULE PARTIAL_SOURCES_INTENDED
+  ExtendedSignAnalysis.cpp
+  Annotate.cpp
+  ExtendedSignPlugin.cpp
+  PLUGIN_TOOL mlir-opt
+)
+
+set_target_properties(ExtendedSignAnalysis PROPERTIES
+  LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}")
+
 #===----------------------------------------------------------------------===#
 # Tests
 #
@@ -140,6 +150,14 @@ if(MLIR_OPT_EXECUTABLE)
       -DINPUT=${CMAKE_CURRENT_SOURCE_DIR}/test/zero.mlir
       -DCHECKS=${CMAKE_CURRENT_SOURCE_DIR}/test/zero.expected
       -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/RunTest.cmake)
+
+  add_test(NAME extended-sign-analysis
+    COMMAND ${CMAKE_COMMAND}
+      -DMLIR_OPT=${MLIR_OPT_EXECUTABLE}
+      -DPLUGIN=$<TARGET_FILE:ExtendedSignAnalysis>
+      -DINPUT=${CMAKE_CURRENT_SOURCE_DIR}/test/extended-sign.mlir
+      -DCHECKS=${CMAKE_CURRENT_SOURCE_DIR}/test/extended-sign.expected
+      -P ${CMAKE_CURRENT_SOURCE_DIR}/cmake/RunExtendedSignTest.cmake)
 else()
   message(STATUS "mlir-opt not found; skipping tests")
 endif()

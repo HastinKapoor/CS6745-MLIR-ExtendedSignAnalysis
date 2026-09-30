@@ -7,6 +7,17 @@ The included analysis, `zero-analysis`, decides which integer values in the LLVM
 dialect are known to be zero. It has exactly two transfer rules and is meant to
 be replaced: the point is the scaffolding around it.
 
+The repository also contains `extended-sign-analysis`, a larger example that
+tracks coarse signed facts:
+
+```text
+Bottom, One, Negative, Zero, Positive, Nonnegative, Nonpositive, Top
+```
+
+`extended-sign-analysis` is intentionally signed-only. Boolean `i1` results and
+unsigned-only operations are left unknown rather than mixing signed and unsigned
+interpretations of the same bit pattern.
+
 ## Building
 
 ```sh
@@ -62,6 +73,22 @@ Get input in the LLVM dialect from C with:
 clang -S -emit-llvm -o - input.c | mlir-translate --import-llvm
 ```
 
+Run the extended-sign analysis with:
+
+```sh
+./run-extended-sign.sh input.mlir
+```
+
+or directly:
+
+```sh
+mlir-opt --load-pass-plugin=build/ExtendedSignAnalysis.so \
+         --pass-pipeline='builtin.module(extended-sign-analysis)' \
+         input.mlir -o /dev/null
+```
+
+Use `build/ExtendedSignAnalysis.dylib` on macOS.
+
 ## What is where
 
 Two files hold the analysis; the rest is reusable scaffolding.
@@ -71,9 +98,14 @@ Two files hold the analysis; the rest is reusable scaffolding.
 | `ZeroDomain.h` | The abstract domain: the lattice elements and their join. |
 | `ZeroAnalysis.cpp` | The transfer function: two rules, plus a default. |
 | `ZeroAnalysis.h` | Ties the domain to MLIR's sparse forward analysis. |
+| `ExtendedSignDomain.h` | The signed extended-sign lattice and join. |
+| `ExtendedSignAnalysis.cpp` | Transfer rules for signed extended-sign facts. |
+| `ExtendedSignAnalysis.h` | Ties the extended-sign domain to MLIR's sparse forward analysis. |
+| `ExtendedSignPlugin.cpp` | Registers the `extended-sign-analysis` pass. |
 | `Annotate.{h,cpp}` | Prints IR with a comment on each value. Domain-agnostic. |
 | `Plugin.cpp` | The pass, the solver setup, and the `mlir-opt` entry point. |
-| `cmake/RunTest.cmake` | The test runner. |
+| `cmake/RunTest.cmake` | The zero-analysis test runner. |
+| `cmake/RunExtendedSignTest.cmake` | The extended-sign test runner. |
 
 To build a different analysis, replace `ZeroDomain.h` and the transfer
 functions in `ZeroAnalysis.cpp`. To rename the whole thing, rename the files,
@@ -82,15 +114,99 @@ appear in `CMakeLists.txt` and `Plugin.cpp`.
 
 ## Tests
 
-`test/zero.mlir` exercises every transfer rule. `test/zero.expected` lists
-facts that must appear in the output, and — with a leading `!` — facts that
-must not. The negative checks are the ones that matter: an unsound transfer
-function still produces plausible-looking output, and only a test that pins
-down what the analysis must *not* claim will catch it.
+`test/zero.mlir` and `test/extended-sign.mlir` exercise the transfer rules for
+the two example analyses. The matching `.expected` files list facts that must
+appear in the output, and — with a leading `!` — facts that must not. The
+negative checks are the ones that matter: an unsound transfer function still
+produces plausible-looking output, and only a test that pins down what the
+analysis must *not* claim will catch it.
 
 Note that MLIR's printer renumbers SSA values, so the checks are written
-against operation text rather than the names in `zero.mlir`. After adding or
-reordering operations, regenerate with `./run.sh test/zero.mlir`.
+against operation text rather than the names in the input file. After adding or
+reordering operations, inspect the new output with:
+
+```sh
+./run.sh test/zero.mlir
+./run-extended-sign.sh test/extended-sign.mlir
+```
+
+## ExtendedSign on SQLite
+
+SQLite is a useful real-world input because it has enough control flow for
+block-argument joins to matter.
+Put the LLVM/MLIR tools you want to use on `PATH` first. The same LLVM/MLIR
+installation should provide `clang`, `mlir-translate`, and `mlir-opt`.
+
+```sh
+git clone https://github.com/sqlite/sqlite.git sqlite
+cd sqlite
+./configure
+make sqlite3.c
+
+clang -O1 -S -emit-llvm \
+  -DSQLITE_THREADSAFE=0 \
+  -DSQLITE_OMIT_LOAD_EXTENSION \
+  -o sqlite3.ll sqlite3.c
+
+mlir-translate --import-llvm sqlite3.ll -o sqlite3.mlir
+```
+
+Then return to this repository, build the plugins, and run the analysis:
+
+```sh
+cmake -S . -B build
+cmake --build build
+
+./run-extended-sign.sh path/to/sqlite/sqlite3.mlir \
+  > sqlite3.extended-sign.mlir
+```
+
+To list all printed extended-sign facts:
+
+```sh
+rg " is (zero|one|negative|positive|nonnegative|nonpositive)" \
+  sqlite3.extended-sign.mlir
+```
+
+One interesting fact appears in SQLite's `sqlite3_status64` function. Search
+for the function and inspect the join block:
+
+```sh
+rg -n -A40 "@sqlite3_status64" sqlite3.extended-sign.mlir
+```
+
+With current LLVM/MLIR printers, that region contains a block like this:
+
+```mlir
+%4 = llvm.mlir.constant(0 : i32) : i32 // %4 is zero
+%5 = llvm.mlir.constant(21 : i32) : i32 // %5 is positive
+...
+^bb1:
+  llvm.br ^bb4(%5 : i32)
+...
+^bb2:
+  llvm.cond_br %18, ^bb4(%4 : i32), ^bb3
+...
+^bb3:
+  llvm.br ^bb4(%4 : i32)
+
+^bb4(%19: i32):  // 3 preds: ^bb1, ^bb2, ^bb3
+  // argument: %19 is nonnegative
+  llvm.return %19 : i32
+```
+
+The SSA name `%19` may be different with another MLIR version, but the shape is
+the important part. The block argument receives either `%5`, known positive, or
+`%4`, known zero. The lattice join is:
+
+```text
+join(Positive, Zero, Zero) = Nonnegative
+```
+
+So ExtendedSign proves the return value in that join block is nonnegative even
+though it is selected by control flow rather than produced by a single
+instruction. This is the kind of fact that plain constant propagation cannot
+express as an exact constant.
 
 ## Notes on portability
 

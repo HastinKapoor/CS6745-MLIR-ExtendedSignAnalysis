@@ -1,0 +1,92 @@
+# Checks against the annotated listing mlir-opt writes to stderr.
+#   plain line  -- this text must appear
+#   !-prefixed  -- this text must NOT appear
+#
+# MLIR's printer renumbers SSA values, so pin each check to operation text
+# rather than to the names in extended-sign.mlir.
+
+# --- rule 1: constants ----------------------------------------------------
+llvm.mlir.constant(0 : i32) : i32 // %0 is zero
+llvm.mlir.constant(1 : i32) : i32 // %1 is one
+llvm.mlir.constant(-3 : i32) : i32 // %2 is negative
+llvm.mlir.constant(2 : i32) : i32 // %3 is positive
+
+# --- rule 2: `and` with a zero operand -----------------------------------
+llvm.and %0, %arg0 : i32 // %4 is zero
+llvm.and %arg0, %0 : i32 // %5 is zero
+
+# --- rule 3: overflow-safe addition --------------------------------------
+llvm.add %3, %0 : i32 // %6 is positive
+llvm.add %0, %2 : i32 // %7 is negative
+llvm.add %1, %1 : i32 // %8 is positive
+llvm.add %1, %2 : i32 // %9 is nonpositive
+llvm.add %2, %1 : i32 // %10 is nonpositive
+
+# --- rule 4: overflow-safe subtraction -----------------------------------
+llvm.sub %2, %0 : i32 // %11 is negative
+llvm.sub %0, %1 : i32 // %12 is negative
+llvm.sub %0, %3 : i32 // %13 is negative
+llvm.sub %1, %1 : i32 // %14 is zero
+llvm.sub %1, %3 : i32 // %15 is nonpositive
+llvm.sub %3, %1 : i32 // %16 is nonnegative
+llvm.sub %0, %16 : i32 // %17 is nonpositive
+
+# --- rule 5: overflow-safe multiplication --------------------------------
+llvm.mul %0, %arg0 : i32 // %18 is zero
+llvm.mul %arg0, %0 : i32 // %19 is zero
+llvm.mul %1, %2 : i32 // %20 is negative
+llvm.mul %3, %1 : i32 // %21 is positive
+llvm.mul %1, %9 : i32 // %22 is nonpositive
+
+# --- rule 6: overflow-safe signed division -------------------------------
+llvm.sdiv %2, %1 : i32 // %23 is negative
+llvm.sdiv %0, %3 : i32 // %24 is zero
+llvm.sdiv %3, %3 : i32 // %25 is nonnegative
+llvm.sdiv %16, %3 : i32 // %26 is nonnegative
+llvm.sdiv %1, %3 : i32 // %27 is nonnegative
+llvm.sdiv %2, %3 : i32 // %28 is nonpositive
+llvm.sdiv %9, %3 : i32 // %29 is nonpositive
+llvm.sdiv %1, %2 : i32 // %30 is nonpositive
+llvm.sdiv %3, %2 : i32 // %31 is nonpositive
+llvm.sdiv %16, %2 : i32 // %32 is nonpositive
+
+# --- rule 7: signed casts -------------------------------------------------
+llvm.mlir.constant(0 : i64) : i64 // %33 is zero
+llvm.mlir.constant(1 : i64) : i64 // %34 is one
+llvm.sext %0 : i32 to i64 // %35 is zero
+llvm.sext %1 : i32 to i64 // %36 is one
+llvm.sext %2 : i32 to i64 // %37 is negative
+llvm.sext %3 : i32 to i64 // %38 is positive
+llvm.sext %16 : i32 to i64 // %39 is nonnegative
+llvm.sext %9 : i32 to i64 // %40 is nonpositive
+llvm.trunc %33 : i64 to i32 // %41 is zero
+llvm.trunc %34 : i64 to i32 // %42 is one
+
+# --- rule 8: signed min/max intrinsics -----------------------------------
+llvm.intr.smax(%3, %arg0) : (i32, i32) -> i32 // %43 is positive
+llvm.intr.smax(%0, %arg0) : (i32, i32) -> i32 // %44 is nonnegative
+llvm.intr.smax(%2, %2) : (i32, i32) -> i32 // %45 is negative
+llvm.intr.smax(%9, %2) : (i32, i32) -> i32 // %46 is nonpositive
+llvm.intr.smin(%2, %arg0) : (i32, i32) -> i32 // %47 is negative
+llvm.intr.smin(%0, %arg0) : (i32, i32) -> i32 // %48 is nonpositive
+llvm.intr.smin(%1, %1) : (i32, i32) -> i32 // %49 is one
+llvm.intr.smin(%3, %1) : (i32, i32) -> i32 // %50 is positive
+llvm.intr.smin(%16, %3) : (i32, i32) -> i32 // %51 is nonnegative
+
+# --- the solver joining facts at block arguments -------------------------
+// argument: %2 is nonnegative
+// argument: %2 is nonpositive
+
+# --- disabled mathematical-integer rules ---------------------------------
+# These facts do not hold in general for fixed-width LLVM integers when
+# overflow is possible, so they must not be annotated.
+!%52 is
+!%53 is
+!%54 is
+!%55 is
+!%56 is
+!%57 is
+!%58 is
+!%59 is
+!%60 is
+!%61 is
