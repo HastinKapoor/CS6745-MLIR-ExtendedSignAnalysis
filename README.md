@@ -1,11 +1,12 @@
 # Extended Sign Analysis
 
-The build process is the same, there is an additional script to run the extended
-sign analysis on an input file.
+The build process is the same as the template, there is an additional script to 
+run the extended sign analysis on an input file.
 
-There is an additional section on how sign analysis finds behavior on SQLite that
-isn't possible via constant propagation (the basic block after control flow takes
-input from one of two assignments, both of which are nonnegative).
+There is an additional section in the README on how sign analysis finds behavior 
+on SQLite that isn't possible via constant propagation (the basic block after 
+control flow takes input from one of two assignments, both of which are
+nonnegative).
 
 I did end up confusing myself and having to reduce the scope slightly: a variable
 can be interpreted as signed or unsigned, which would turn a negative integer 
