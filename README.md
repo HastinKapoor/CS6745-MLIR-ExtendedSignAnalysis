@@ -18,6 +18,10 @@ to get rid of the boolean / select transfer rules.
 The transfer rules also are conservative where overflow is possible, since the 
 goal is soundness first. This means Positive + Positive != Positive.
 
+Output of the SQLite analysis is in SQLite-Output.
+It includes the full output, the facts only, and the specific
+output example of "interesting" behavior.
+
 # MLIR out-of-tree dataflow analysis template
 
 A starting point for writing an MLIR dataflow analysis as a loadable `mlir-opt`
@@ -180,6 +184,15 @@ cmake --build build
 ./run-extended-sign.sh path/to/sqlite/sqlite3.mlir \
   > sqlite3.extended-sign.mlir
 ```
+
+The `SQLite-Output` directory contains saved output from this analysis:
+
+- `SQLite-Output/sqlite3.extended-sign.mlir` is the annotated SQLite MLIR output.
+- `SQLite-Output/sqlite3.extended-sign_facts.mlir` contains all facts printed by
+  the analysis.
+- `SQLite-Output/sqlite3.extended-sign_example.mlir` contains the block-argument
+  join example below, which shows information ExtendedSign can prove that plain
+  constant propagation cannot express as an exact constant.
 
 To list all printed extended-sign facts:
 
