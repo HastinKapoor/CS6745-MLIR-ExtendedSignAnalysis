@@ -1,3 +1,23 @@
+# Extended Sign Analysis
+
+The build process is the same, there is an additional script to run the extended
+sign analysis on an input file.
+
+There is an additional section on how sign analysis finds behavior on SQLite that
+isn't possible via constant propagation (the basic block after control flow takes
+input from one of two assignments, both of which are nonnegative).
+
+I did end up confusing myself and having to reduce the scope slightly: a variable
+can be interpreted as signed or unsigned, which would turn a negative integer 
+into a positive one! This is especially problematic for one bit variables, since
+"isOne" looks for the bit pattern encoding 1 but interpreting this is a signed 
+integer means "One" is actually -1. I restricted the result width and used only
+signed interpretations of variables to try and ignore this problem, meaning I had
+to get rid of the boolean / select transfer rules.
+
+The transfer rules also are conservative where overflow is possible, since the 
+goal is soundness first. This means Positive + Positive != Positive.
+
 # MLIR out-of-tree dataflow analysis template
 
 A starting point for writing an MLIR dataflow analysis as a loadable `mlir-opt`
