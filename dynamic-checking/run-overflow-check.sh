@@ -37,8 +37,34 @@ instrument_and_link() {
 }
 
 instrument_and_link sound "instrument=true"
+
+assert_result_is_unannotated() {
+  local function=$1
+  local operation_pattern=$2
+  local section
+  section=$(awk -v marker="@$function(" '
+    /^  llvm\.func/ && index($0, marker) { inside = 1 }
+    inside { print }
+    inside && /^  }/ { exit }
+  ' "$work_dir/sound.facts.txt")
+  if ! grep -Eq "llvm\\.($operation_pattern) " <<<"$section"; then
+    echo "error: $function has no expected operation in imported MLIR" >&2
+    exit 1
+  fi
+  if grep -Eq "llvm\\.($operation_pattern).* // .* is " <<<"$section"; then
+    echo "error: $function unexpectedly received an ExtendedSign fact" >&2
+    exit 1
+  fi
+}
+
+assert_result_is_unannotated unchecked_add add
+assert_result_is_unannotated unchecked_subtract 'add|sub'
+assert_result_is_unannotated unchecked_multiply 'mul|shl'
+assert_result_is_unannotated unchecked_divide 'sdiv|sub'
+
 "$work_dir/sound"
 echo "sound analysis: 1,000,064 input pairs passed"
+echo "overflow-sensitive add/subtract/multiply/divide results remained unknown"
 
 instrument_and_link unsound \
   "instrument=true inject-unsound-add-rule=true"

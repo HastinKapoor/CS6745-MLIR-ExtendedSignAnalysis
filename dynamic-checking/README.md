@@ -13,6 +13,14 @@ into the imported MLIR file.
 `overflow.c` exercises signed min/max, arithmetic, and division over boundary
 values and one million deterministic pseudorandom input pairs. The final case
 adds two positive `INT_MAX` values under `-fwrapv`, producing `-2`.
+It also verifies that wrapping addition, subtraction, and multiplication, plus
+the exceptional signed-division shape, receive no ExtendedSign result fact.
+The exact `INT_MIN / -1` input is not executed because it is undefined in both
+C and LLVM IR; the closest safe dividend, `INT_MIN + 1`, is executed instead.
+At `-O1`, Clang may canonicalize multiplication by two to a shift and division
+by negative one to subtraction from zero. The test accepts those equivalent
+forms, requires that the generated operation is present, and still checks that
+ExtendedSign does not annotate its result.
 
 `overflow-bug.mlir` is the minimal standalone reproducer: it adds two positive
 `i32` maximum values, whose fixed-width result is `-2`.

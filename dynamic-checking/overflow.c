@@ -26,6 +26,29 @@ __attribute__((noinline)) int32_t add_positive(int32_t lhs, int32_t rhs) {
   return positive_lhs + positive_rhs;
 }
 
+// These operations intentionally cross signed boundaries. ExtendedSign must
+// leave their results unknown because their mathematical sign does not survive
+// fixed-width wrapping.
+__attribute__((noinline)) int32_t unchecked_add(int32_t value) {
+  int32_t positive = value > 1 ? value : 1;
+  return positive + 1;
+}
+
+__attribute__((noinline)) int32_t unchecked_subtract(int32_t value) {
+  int32_t negative = value < -1 ? value : -1;
+  return negative - 1;
+}
+
+__attribute__((noinline)) int32_t unchecked_multiply(int32_t value) {
+  int32_t positive = value > 1 ? value : 1;
+  return positive * 2;
+}
+
+__attribute__((noinline)) int32_t unchecked_divide(int32_t value) {
+  int32_t negative = value < -1 ? value : -1;
+  return negative / -1;
+}
+
 int main(void) {
   static const int32_t edges[] = {INT_MIN, INT_MIN + 1, -2, -1,
                                   0,       1,           2,  INT_MAX};
@@ -44,6 +67,15 @@ int main(void) {
   }
 
   volatile int32_t max_value = INT_MAX;
+  volatile int32_t min_value = INT_MIN;
+  checksum ^= (uint32_t)unchecked_add(max_value);
+  checksum ^= (uint32_t)unchecked_subtract(min_value);
+  checksum ^= (uint32_t)unchecked_multiply(max_value);
+
+  // INT_MIN / -1 is undefined in both C and LLVM IR. Exercise the same
+  // transfer-function shape with the closest safe dividend instead.
+  checksum ^= (uint32_t)unchecked_divide(min_value + 1);
+
   volatile int32_t result = add_positive(max_value, max_value);
   return result == -2 || checksum == UINT32_MAX ? 0 : 1;
 }
