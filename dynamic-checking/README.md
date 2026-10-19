@@ -46,3 +46,32 @@ If the matching tools are not on `PATH`, set `MLIR_OPT`, `MLIR_TRANSLATE`, and
 
 The bug-injection option is a negative control for the checker. It is off by
 default and does not affect normal analysis results.
+
+## Minimal bug reproducer
+
+To instrument `overflow-bug.mlir` with the deliberately unsound addition rule:
+
+```sh
+mlir-opt \
+  --load-pass-plugin=build/ExtendedSignAnalysis.so \
+  --pass-pipeline='builtin.module(extended-sign-analysis{instrument=true inject-unsound-add-rule=true})' \
+  dynamic-checking/overflow-bug.mlir \
+  -o dynamic-checking/overflow-bug.instrumented.mlir
+```
+
+Translate it back to LLVM IR, link the assertion runtime, and execute it:
+
+```sh
+mlir-translate --mlir-to-llvmir \
+  dynamic-checking/overflow-bug.instrumented.mlir \
+  -o /tmp/overflow-bug.ll
+
+clang /tmp/overflow-bug.ll \
+  dynamic-checking/ExtendedSignRuntime.c \
+  -o /tmp/overflow-bug
+
+/tmp/overflow-bug
+```
+
+The executable aborts because the buggy rule labels `INT_MAX + INT_MAX` as
+positive even though its fixed-width result is `-2`.

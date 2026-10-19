@@ -172,6 +172,35 @@ executable workflow and a reproducible negative control. The negative control
 enables a deliberately unsound overflow rule only when
 `inject-unsound-add-rule=true`; normal analysis behavior is unchanged.
 
+To run the minimal `overflow-bug.mlir` reproducer with that deliberately buggy
+rule, first instrument it:
+
+```sh
+mlir-opt \
+  --load-pass-plugin=build/ExtendedSignAnalysis.so \
+  --pass-pipeline='builtin.module(extended-sign-analysis{instrument=true inject-unsound-add-rule=true})' \
+  dynamic-checking/overflow-bug.mlir \
+  -o dynamic-checking/overflow-bug.instrumented.mlir
+```
+
+Then translate the instrumented MLIR back to LLVM IR, link the assertion
+runtime, and execute it:
+
+```sh
+mlir-translate --mlir-to-llvmir \
+  dynamic-checking/overflow-bug.instrumented.mlir \
+  -o /tmp/overflow-bug.ll
+
+clang /tmp/overflow-bug.ll \
+  dynamic-checking/ExtendedSignRuntime.c \
+  -o /tmp/overflow-bug
+
+/tmp/overflow-bug
+```
+
+The final command aborts because the buggy rule claims that
+`INT_MAX + INT_MAX` is positive, while the fixed-width result is `-2`.
+
 ## ExtendedSign on SQLite
 
 SQLite is a useful real-world input because it has enough control flow for
