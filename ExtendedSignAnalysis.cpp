@@ -150,6 +150,16 @@ ExtendedSignAnalysis::visitOperation(Operation *op,
       return success();
     }
 
+    // Dynamic-checking negative control.  This rule is deliberately unsound
+    // for fixed-width integers: two positive values can wrap to a negative
+    // result.  It is disabled unless the pass explicitly requests it.
+    if (injectUnsoundAddRule && lhs.kind == Kind::Positive &&
+        rhs.kind == Kind::Positive) {
+      propagateIfChanged(result,
+                         result->join(ExtendedSignState(Kind::Positive)));
+      return success();
+    }
+
     // The remaining addition facts are valid for mathematical integers, but
     // do not hold when fixed-width integer overflow is possible.
     

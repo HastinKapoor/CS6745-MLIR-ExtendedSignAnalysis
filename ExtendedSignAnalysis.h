@@ -13,7 +13,10 @@ using ExtendedSignLattice = mlir::dataflow::Lattice<ExtendedSignState>;
 class ExtendedSignAnalysis
     : public mlir::dataflow::SparseForwardDataFlowAnalysis<ExtendedSignLattice> {
 public:
-  using SparseForwardDataFlowAnalysis::SparseForwardDataFlowAnalysis;
+  explicit ExtendedSignAnalysis(mlir::DataFlowSolver &solver,
+                                bool injectUnsoundAddRule = false)
+      : SparseForwardDataFlowAnalysis(solver),
+        injectUnsoundAddRule(injectUnsoundAddRule) {}
 
   /// Transfer function: given the states of `op`'s operands, set the states of
   /// its results.  Must be monotone in the operand states.
@@ -25,6 +28,9 @@ public:
   /// The state of anything entering the analysis from outside: function
   /// arguments, and results the transfer function declines to reason about.
   void setToEntryState(ExtendedSignLattice *lattice) override;
+
+private:
+  bool injectUnsoundAddRule;
 };
 
 } // namespace extended_sign

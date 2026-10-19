@@ -155,6 +155,23 @@ reordering operations, inspect the new output with:
 ./run-extended-sign.sh test/extended-sign.mlir
 ```
 
+## Dynamic soundness checking
+
+The ExtendedSign pass can turn every proved fact into a runtime assertion:
+
+```sh
+mlir-opt --load-pass-plugin=build/ExtendedSignAnalysis.so \
+  --pass-pipeline='builtin.module(extended-sign-analysis{instrument=true})' \
+  input.mlir -o instrumented.mlir
+```
+
+The transformed program calls `__extended_sign_assert`, implemented by
+`dynamic-checking/ExtendedSignRuntime.c`. See
+`dynamic-checking/README.md` for the complete C to LLVM IR to MLIR to
+executable workflow and a reproducible negative control. The negative control
+enables a deliberately unsound overflow rule only when
+`inject-unsound-add-rule=true`; normal analysis behavior is unchanged.
+
 ## ExtendedSign on SQLite
 
 SQLite is a useful real-world input because it has enough control flow for
